@@ -51,6 +51,7 @@ import com.franlop.android_firebase.utils.AnalyticsManager
 import com.franlop.android_firebase.utils.AuthManager
 import com.franlop.android_firebase.utils.AuthRes
 import kotlinx.coroutines.launch
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 
 @Composable
 fun LoginScreen(analytics: AnalyticsManager, auth: AuthManager, navigation: NavController) {
@@ -162,6 +163,22 @@ fun LoginScreen(analytics: AnalyticsManager, auth: AuthManager, navigation: NavC
             text = "Continuar con Google",
             icon = R.drawable.ic_google,
             color = Color(0xFFF1F1F1)
+        )
+        Spacer(modifier = Modifier.height(25.dp))
+        ClickableText(
+            text = AnnotatedString("Forzar cierre Crashlytics"),
+            onClick = {
+                val crashlytics = FirebaseCrashlytics.getInstance()
+                crashlytics.setCustomKey("pruebaClave", "valor de la prueba clave")
+                crashlytics.log("Mensaje personalizado desde un log")
+                throw RuntimeException("Error forzado desde LoginScreen")
+            },
+            style = TextStyle(
+                fontSize = 14.sp,
+                fontFamily = FontFamily.Default,
+                textDecoration = TextDecoration.Underline,
+                color = Purple40
+            )
         )
     }
 }

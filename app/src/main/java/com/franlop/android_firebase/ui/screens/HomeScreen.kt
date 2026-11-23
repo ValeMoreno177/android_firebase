@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.ExitToApp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +37,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -59,9 +63,60 @@ import com.franlop.android_firebase.ui.screens.login.ContactsScreen
 import com.franlop.android_firebase.ui.screens.login.NotesScreen
 import com.franlop.android_firebase.utils.AnalyticsManager
 import com.franlop.android_firebase.utils.AuthManager
+import com.franlop.android_firebase.utils.CloudStorageManager
+import com.franlop.android_firebase.ui.screens.storage.CloudStorageScreen
+import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.google.firebase.remoteconfig.ConfigUpdate
+import com.google.firebase.remoteconfig.ConfigUpdateListener
+import com.google.firebase.remoteconfig.FirebaseRemoteConfig
+import com.google.firebase.remoteconfig.FirebaseRemoteConfigException
+import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
+import android.util.Log
 import com.franlop.android_firebase.utils.FirestoreManager
 import com.franlop.android_firebase.utils.RealtimeManager
 import kotlinx.coroutines.launch
+
+// ---------- Remote Config ----------
+private const val WELCOME_MESSAGE_KEY = "welcome_message"
+private const val IS_BUTTON_VISIBLE_KEY = "is_button_visible"
+
+private var welcomeMessage by mutableStateOf("Bienvenidx")
+private var isButtonVisible by mutableStateOf(true)
+
+private fun initRemoteConfig() {
+    val remoteConfig = FirebaseRemoteConfig.getInstance()
+    val settings = FirebaseRemoteConfigSettings.Builder()
+        .setMinimumFetchIntervalInSeconds(3600)
+        .build()
+    remoteConfig.setConfigSettingsAsync(settings)
+    remoteConfig.setDefaultsAsync(R.xml.remote_config_defaults)
+
+    // Escucha cambios en tiempo real desde la consola
+    remoteConfig.addOnConfigUpdateListener(object : ConfigUpdateListener {
+        override fun onUpdate(configUpdate: ConfigUpdate) {
+            Log.d("HomeScreen", "Updated keys: " + configUpdate.updatedKeys)
+            if (configUpdate.updatedKeys.contains(WELCOME_MESSAGE_KEY) ||
+                configUpdate.updatedKeys.contains(IS_BUTTON_VISIBLE_KEY)
+            ) {
+                remoteConfig.activate().addOnCompleteListener { displayRemoteValues(remoteConfig) }
+            }
+        }
+
+        override fun onError(error: FirebaseRemoteConfigException) {
+            Log.w("HomeScreen", "Remote Config error", error)
+        }
+    })
+
+    remoteConfig.fetchAndActivate().addOnCompleteListener { task ->
+        if (task.isSuccessful) displayRemoteValues(remoteConfig)
+        else Log.w("HomeScreen", "Fetch de Remote Config falló")
+    }
+}
+
+private fun displayRemoteValues(remoteConfig: FirebaseRemoteConfig) {
+    welcomeMessage = remoteConfig.getString(WELCOME_MESSAGE_KEY)
+    isButtonVisible = remoteConfig.getBoolean(IS_BUTTON_VISIBLE_KEY)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,6 +129,9 @@ fun HomeScreen(analytics: AnalyticsManager, auth: AuthManager, navigation: NavCo
     val uid = user?.uid ?: ""
     val realtime = remember(uid) { RealtimeManager() }
     val firestore = remember(uid) { FirestoreManager(uid) }
+    val storage = remember(uid) { CloudStorageManager(uid) }
+
+    LaunchedEffect(Unit) { initRemoteConfig() }
 
     var showDialog by remember { mutableStateOf(false) }
 
@@ -122,7 +180,7 @@ fun HomeScreen(analytics: AnalyticsManager, auth: AuthManager, navigation: NavCo
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = if (!user?.displayName.isNullOrEmpty()) "Hola ${user?.displayName}" else "Bienvenidx",
+                                text = if (!user?.displayName.isNullOrEmpty()) "Hola ${user?.displayName}" else welcomeMessage,
                                 fontSize = 20.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -137,6 +195,20 @@ fun HomeScreen(analytics: AnalyticsManager, auth: AuthManager, navigation: NavCo
                 },
                 colors = TopAppBarDefaults.topAppBarColors(),
                 actions = {
+                    // Crashlytics: fuerza un error de prueba (Remote Config decide si se ve)
+                    IconButton(
+                        onClick = {
+                            val crashlytics = FirebaseCrashlytics.getInstance()
+                            crashlytics.setCustomKey("pruebaClaveHome", "Valor a enviar")
+                            crashlytics.log("Mensaje log desde HomeScreen")
+                            crashlytics.setUserId(user?.uid ?: "No Id Found")
+                            throw RuntimeException("Error forzado desde HomeScreen")
+                        },
+                        enabled = isButtonVisible,
+                        modifier = Modifier.alpha(if (isButtonVisible) 1f else 0f)
+                    ) {
+                        Icon(Icons.Default.Warning, contentDescription = "Forzar error")
+                    }
                     IconButton(
                         onClick = {
                             showDialog = true
@@ -158,7 +230,7 @@ fun HomeScreen(analytics: AnalyticsManager, auth: AuthManager, navigation: NavCo
                     showDialog = false
                 }, onDismiss = { showDialog = false })
             }
-            BottomNavGraph(navController = navController, realtime = realtime, firestore = firestore, uid = uid)
+            BottomNavGraph(navController = navController, realtime = realtime, firestore = firestore, storage = storage, uid = uid)
         }
     }
 }
@@ -190,7 +262,8 @@ fun LogoutDialog(onConfirmLogout: () -> Unit, onDismiss: () -> Unit) {
 fun BottomBar(navController: NavHostController) {
     val screens = listOf(
         BottomNavScreen.Contact,
-        BottomNavScreen.Note
+        BottomNavScreen.Note,
+        BottomNavScreen.Photos
     )
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -229,6 +302,7 @@ fun BottomNavGraph(
     navController: NavHostController,
     realtime: RealtimeManager,
     firestore: FirestoreManager,
+    storage: CloudStorageManager,
     uid: String
 ) {
     NavHost(navController = navController, startDestination = BottomNavScreen.Contact.route) {
@@ -237,6 +311,9 @@ fun BottomNavGraph(
         }
         composable(route = BottomNavScreen.Note.route) {
             NotesScreen(firestore = firestore)
+        }
+        composable(route = BottomNavScreen.Photos.route) {
+            CloudStorageScreen(storage = storage)
         }
     }
 }
@@ -251,5 +328,10 @@ sealed class BottomNavScreen(val route: String, val title: String, val icon: Ima
         route = "notes",
         title = "Notas",
         icon = Icons.Default.List
+    )
+    object Photos : BottomNavScreen(
+        route = "photos",
+        title = "Fotos",
+        icon = Icons.Default.Face
     )
 }

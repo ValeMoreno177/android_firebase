@@ -46,3 +46,29 @@ service cloud.firestore {
 
 ## 5. Sincroniza y ejecuta
 En Android Studio: **Sync Project with Gradle Files** → Run.
+
+## 6. Cloud Storage (Fotos)
+Activa Storage y pega estas reglas:
+```
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /photos/{uid}/{fileName} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
+```
+
+## 7. Remote Config
+Crea dos parámetros y publica los cambios:
+- `welcome_message` (String), por ejemplo `Hola desde Remote Config`
+- `is_button_visible` (Booleano): `true` muestra el botón ⚠ de Crashlytics en el Home y `false` lo oculta
+
+## 8. Crashlytics
+Entra a Crashlytics en la consola. Corre la app, toca "Forzar cierre Crashlytics" (login) o el ⚠ (home),
+vuelve a abrir la app y espera unos minutos a que aparezca el error.
+
+## 9. Cloud Messaging (notificaciones)
+Acepta el permiso de notificaciones al abrir la app. En el Logcat filtra por `FCM TOKEN` y copia el token.
+En la consola entra a Messaging → Nueva campaña → Notificaciones → "Enviar mensaje de prueba" y pega el token.

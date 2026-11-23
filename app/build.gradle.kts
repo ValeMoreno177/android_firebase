@@ -1,5 +1,6 @@
 plugins {
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
@@ -62,6 +63,12 @@ dependencies {
     implementation("com.google.firebase:firebase-database")
     // Cloud Firestore (Notas)
     implementation("com.google.firebase:firebase-firestore")
+    // Cloud Storage (Fotos)
+    implementation("com.google.firebase:firebase-storage")
+    // Crashlytics, Remote Config y Cloud Messaging (notificaciones)
+    implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.firebase:firebase-config")
+    implementation("com.google.firebase:firebase-messaging")
     // Para usar .await() en las tareas de Firebase con corrutinas
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
 

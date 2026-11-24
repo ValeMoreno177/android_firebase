@@ -1,6 +1,7 @@
 package com.franlop.android_firebase.utils
 
 import com.franlop.android_firebase.model.Contact
+import android.util.Log
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
@@ -45,7 +46,10 @@ class RealtimeManager {
             }
 
             override fun onCancelled(error: DatabaseError) {
-                close(error.toException())
+                // Ej. permiso denegado al cerrar sesión: se registra y se cierra sin tumbar la app
+                Log.w("RealtimeManager", "Lectura cancelada: ${error.message}")
+                trySend(emptyList())
+                close()
             }
         }
 

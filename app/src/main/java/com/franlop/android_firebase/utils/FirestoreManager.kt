@@ -1,5 +1,6 @@
 package com.franlop.android_firebase.utils
 
+import android.util.Log
 import com.franlop.android_firebase.model.Note
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
@@ -32,7 +33,10 @@ class FirestoreManager(private val uid: String) {
             .whereEqualTo("userId", uid)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    close(error)
+                    // Ej. permiso denegado al cerrar sesión: se registra y se cierra sin tumbar la app
+                    Log.w("FirestoreManager", "Lectura cancelada: ${error.message}")
+                    trySend(emptyList())
+                    close()
                     return@addSnapshotListener
                 }
                 val notes = snapshot?.documents?.mapNotNull { doc ->
